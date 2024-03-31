@@ -1,101 +1,135 @@
 import 'dart:io';
 
-import 'package:puppeteer/puppeteer.dart';
+import 'package:flutter/material.dart';
+import 'package:webview_app/openai_assistant.dart';
+import 'package:window_manager/window_manager.dart';
 
 void main() async {
-  bool blocked = false;
+  WidgetsFlutterBinding.ensureInitialized();
+  await windowManager.ensureInitialized();
+  if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+    WindowManager.instance.setMinimumSize(const Size(420, 720));
+    WindowManager.instance.setMaximumSize(const Size(420, 720));
+  }
+  runApp(MyApp());
+}
 
-  var browser = await puppeteer.launch(
-      headless: false, args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      executablePath: '/usr/bin/google-chrome'
-  );
-  var page = await browser.newPage();
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
-  await page.goto('http://192.168.1.1/',
-      wait: Until.networkIdle);
+  // This widget is the root of your application.
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Flutter Demo',
+      theme: ThemeData(
+        // This is the theme of your application.
+        //
+        // TRY THIS: Try running your application with "flutter run". You'll see
+        // the application has a purple toolbar. Then, without quitting the app,
+        // try changing the seedColor in the colorScheme below to Colors.green
+        // and then invoke "hot reload" (save your changes or press the "hot
+        // reload" button in a Flutter-supported IDE, or press "r" if you used
+        // the command line to start the app).
+        //
+        // Notice that the counter didn't reset back to zero; the application
+        // state is not lost during the reload. To reset the state, use hot
+        // restart instead.
+        //
+        // This works for code too, not just values: Most code changes can be
+        // tested with just a hot reload.
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
+      ),
+      home: SelectorExtractorWidget(),
+    );
+  }
+}
 
-  // // Type into search box.
-  // await page.type('.devsite-search-field', 'Headless Chrome');
-  // // Wait for suggest overlay to appear and click "show all results".
-  // var allResultsSelector = '.devsite-suggest-all-results';
-  // await page.waitForSelector(allResultsSelector);
-  // await page.click(allResultsSelector);
-  // // Wait for the results page to load and display the results.
-  // const resultsSelector = '.gsc-results .gsc-thumbnail-inside a.gs-title';
-  // await page.waitForSelector(resultsSelector);
+class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key, required this.title});
 
-  // Extract the results from the page.
-  // var links = await page.evaluate<List<dynamic>>(r'''resultsSelector => {
-  //   const anchors = Array.from(document.querySelectorAll(resultsSelector));
-  //   return anchors.map(anchor => {
-  //     const title = anchor.textContent.split('|')[0].trim();
-  //     return `${title} - ${anchor.href}`;
-  //   });
-  // }''', args: [resultsSelector]);
+  // This widget is the home page of your application. It is stateful, meaning
+  // that it has a State object (defined below) that contains fields that affect
+  // how it looks.
 
-  // For every user click at the web page, colours the element with
-  // a red translucent overlay.
-  String jsSnippet = '''
-    var previousElement;
+  // This class is the configuration for the state. It holds the values (in this
+  // case the title) provided by the parent (in this case the App widget) and
+  // used by the build method of the State. Fields in a Widget subclass are
+  // always marked "final".
 
-    document.addEventListener('click', function(event) {
-        // Reset the background color of the previously clicked element
-        if (previousElement) {
-            previousElement.style.backgroundColor = '';
-        }
+  final String title;
 
-        // Change the background color of the clicked element to translucent red
-        event.target.style.backgroundColor = 'rgba(255, 0, 0, 0.3)';
+  @override
+  State<MyHomePage> createState() => _MyHomePageState();
+}
 
-        // Update the previously clicked element
-        previousElement = event.target;
+class _MyHomePageState extends State<MyHomePage> {
+  int _counter = 0;
 
-        console.log('!clicked_element!', event.target.outerHTML);
+  void _incrementCounter() {
+    setState(() {
+      // This call to setState tells the Flutter framework that something has
+      // changed in this State, which causes it to rerun the build method below
+      // so that the display can reflect the updated values. If we changed
+      // _counter without calling setState(), then the build method would not be
+      // called again, and so nothing would appear to happen.
+      _counter++;
     });
-  ''';
-  String blockedJsSnippet = '''
-    document.addEventListener('click', function(event) {
-        if (previousElement) {
-            previousElement.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
-        }
-    });
-  ''';
+  }
 
-  page.onConsole.listen((msg) async {
-    if (blocked) return;
-    if (msg.text == null) return;
-    if (msg.text!.contains('!clicked_element!')) {
-      // Get only the HTML of the clicked element
-      String clickedElement = msg.text!.split('!clicked_element!')[1];
-      // Block the browser from interacting with the page
-      blocked = true;
-      await page.evaluate(blockedJsSnippet);
-      // Send a request to OpenAI assistant using python
-      // The python script will return a response
-      // To call the python script, use the Process class
-      // with the following command:
-      //    python lib/open_ai_assistant.py
-      //      --name "username_input"
-      //      --description "Login username input form field"
-      //      --html "${clickedElement}"
-      ProcessResult results = await Process.run(
-        'python', [
-          'lib/open_ai_assistant.py',
-            '--name', '"username_input"',
-            '--description', '"Login username input form field"',
-            '--html', '"$clickedElement"'
-        ],
-      );
-      // Parse the response from the python script
-      // and display it in the console
-      String result = results.stdout.toString();
-      print(result);
-      // Enable the user to interact with the page again
-      blocked = false;
-      await page.evaluate(jsSnippet);
-    }
-  });
-
-  // Inject the snippet into the page
-  await page.evaluate(blocked ? blockedJsSnippet : jsSnippet);
+  @override
+  Widget build(BuildContext context) {
+    // This method is rerun every time setState is called, for instance as done
+    // by the _incrementCounter method above.
+    //
+    // The Flutter framework has been optimized to make rerunning build methods
+    // fast, so that you can just rebuild anything that needs updating rather
+    // than having to individually change instances of widgets.
+    return Scaffold(
+      appBar: AppBar(
+        // TRY THIS: Try changing the color here to a specific color (to
+        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
+        // change color while the other colors stay the same.
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        // Here we take the value from the MyHomePage object that was created by
+        // the App.build method, and use it to set our appbar title.
+        title: Text(widget.title),
+      ),
+      body: Center(
+        // Center is a layout widget. It takes a single child and positions it
+        // in the middle of the parent.
+        child: Column(
+          // Column is also a layout widget. It takes a list of children and
+          // arranges them vertically. By default, it sizes itself to fit its
+          // children horizontally, and tries to be as tall as its parent.
+          //
+          // Column has various properties to control how it sizes itself and
+          // how it positions its children. Here we use mainAxisAlignment to
+          // center the children vertically; the main axis here is the vertical
+          // axis because Columns are vertical (the cross axis would be
+          // horizontal).
+          //
+          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
+          // action in the IDE, or press "p" in the console), to see the
+          // wireframe for each widget.
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            const Text(
+              'You have pushed the button this many times:',
+            ),
+            Text(
+              '$_counter',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _incrementCounter,
+        tooltip: 'Increment',
+        child: const Icon(Icons.add),
+      ), // This trailing comma makes auto-formatting nicer for build methods.
+    );
+  }
 }
